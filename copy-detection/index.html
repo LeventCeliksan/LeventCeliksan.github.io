@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How I find edited copies of images across the web without crawling it · Levent Celiksan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@87.5,500;87.5,700;100,600&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+:root{
+  --bg:#F3F5F6;
+  --surface:#FFFFFF;
+  --ink:#172028;
+  --ink-2:#3A4651;
+  --muted:#5E6A75;
+  --rule:#D6DCE1;
+  --verified:#0E7169;
+  --verified-soft:#D5EBE8;
+  --cand:#B7801A;
+  --cand-soft:#F4E6C8;
+  --code-bg:#E9EDF0;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#101618;--surface:#172024;--ink:#E4EAEC;--ink-2:#C3CDD1;--muted:#93A1A8;--rule:#2B373B;
+    --verified:#46B8AB;--verified-soft:#173B38;--cand:#DDAA4A;--cand-soft:#3E3320;--code-bg:#1D272B;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#101618;--surface:#172024;--ink:#E4EAEC;--ink-2:#C3CDD1;--muted:#93A1A8;--rule:#2B373B;
+  --verified:#46B8AB;--verified-soft:#173B38;--cand:#DDAA4A;--cand-soft:#3E3320;--code-bg:#1D272B;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--serif);font-size:19px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.page{padding-inline:20px;padding-block:56px 72px}
+.col{max-width:680px;margin-inline:auto}
+.wide{max-width:880px;margin-inline:auto}
+header.masthead{display:flex;flex-direction:column;gap:18px;padding-bottom:30px;border-bottom:1px solid var(--rule);margin-bottom:34px}
+.eyebrow{font-family:var(--display);font-stretch:87.5%;font-weight:700;font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--verified)}
+h1{font-family:var(--display);font-stretch:87.5%;font-weight:700;font-size:clamp(34px,6.2vw,52px);line-height:1.04;letter-spacing:-.015em;margin:0;text-wrap:balance}
+.dek{font-size:21px;line-height:1.5;color:var(--ink-2);margin:0;text-wrap:pretty}
+.byline{display:flex;flex-wrap:wrap;gap:6px 18px;font-family:var(--display);font-size:14px;color:var(--muted)}
+.byline strong{color:var(--ink);font-weight:600}
+article p{margin:0 0 1.05em}
+article h2{font-family:var(--display);font-stretch:87.5%;font-weight:700;font-size:28px;line-height:1.15;margin:2.1em 0 .6em;text-wrap:balance}
+article h3{font-family:var(--display);font-weight:600;font-size:19px;line-height:1.3;margin:1.7em 0 .45em}
+article ul{margin:0 0 1.1em;padding-left:1.2em}
+article li{margin-bottom:.4em}
+article li::marker{color:var(--muted)}
+a{color:var(--verified);text-underline-offset:3px}
+a:focus-visible{outline:2px solid var(--verified);outline-offset:2px;border-radius:2px}
+.num{font-family:var(--mono);font-size:.86em;font-variant-numeric:tabular-nums}
+em.term{font-style:italic}
+code{font-family:var(--mono);font-size:.84em;background:var(--code-bg);padding:.1em .35em;border-radius:3px}
+
+/* figures */
+figure{margin:2.2em auto;padding:0}
+figcaption{font-family:var(--display);font-size:14px;line-height:1.5;color:var(--muted);margin-top:12px;max-width:680px}
+figcaption b{color:var(--ink);font-weight:600}
+.figlabel{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--muted);text-transform:uppercase;margin-bottom:10px}
+
+/* pipeline */
+.pipe{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:22px;position:relative}
+.stage{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:14px 14px 16px;display:flex;flex-direction:column;gap:6px;position:relative}
+.stage h4{font-family:var(--display);font-weight:600;font-size:16px;line-height:1.25;margin:0}
+.stage p{font-family:var(--display);font-size:13.5px;line-height:1.45;color:var(--ink-2);margin:0}
+.stage .tag{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;align-self:flex-start;padding:2px 7px;border-radius:3px}
+.stage.in .tag{background:var(--code-bg);color:var(--muted)}
+.stage.borrow{border-top:3px solid var(--cand)}
+.stage.borrow .tag{background:var(--cand-soft);color:var(--cand)}
+.stage.own{border-top:3px solid var(--verified)}
+.stage.own .tag{background:var(--verified-soft);color:var(--verified)}
+.stage:not(:last-child)::after{content:"";position:absolute;top:50%;right:-17px;width:12px;height:12px;border-top:2px solid var(--muted);border-right:2px solid var(--muted);transform:translateY(-50%) rotate(45deg)}
+.stage .count{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:auto;padding-top:4px}
+@media (max-width:760px){
+  .pipe{grid-template-columns:1fr;gap:26px}
+  .stage:not(:last-child)::after{top:auto;bottom:-19px;right:auto;left:26px;transform:rotate(135deg)}
+}
+
+/* bars */
+.bars{display:grid;grid-template-columns:minmax(150px,210px) 1fr 84px;gap:10px 14px;align-items:center;font-family:var(--display);font-size:14.5px}
+.bars .lab{color:var(--ink);line-height:1.3}
+.bars .lab small{display:block;color:var(--muted);font-size:12.5px}
+.track{height:22px;position:relative}
+.cand{height:100%;background:var(--cand-soft);border:1.5px solid var(--cand);border-radius:3px;overflow:hidden;min-width:0}
+.ver{height:100%;background:var(--verified)}
+.bars .val{font-family:var(--mono);font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.bars .zero{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.bars .total{padding-top:10px;border-top:1px solid var(--rule)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-family:var(--display);font-size:13px;color:var(--muted);margin-bottom:14px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw{width:14px;height:14px;border-radius:2px;display:inline-block}
+.sw.c{background:var(--cand-soft);border:1.5px solid var(--cand)}
+.sw.v{background:var(--verified)}
+@media (max-width:560px){
+  .bars{grid-template-columns:1fr 64px}
+  .bars .lab{grid-column:1 / -1;margin-bottom:-4px}
+  .bars .total{padding-top:6px}
+}
+
+/* overlap + timing */
+.stack{display:flex;height:34px;border-radius:4px;overflow:hidden;font-family:var(--mono);font-size:12.5px}
+.stack > div{display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden}
+.s-lens{background:var(--verified);color:var(--bg)}
+.s-both{background:var(--ink);color:var(--bg)}
+.s-yan{background:var(--verified-soft);color:var(--verified);border:1.5px solid var(--verified)}
+.s-search{background:var(--cand);color:var(--bg)}
+.s-verify{background:var(--verified);color:var(--bg)}
+.stack-keys{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-family:var(--display);font-size:13.5px;color:var(--ink-2);margin-top:8px}
+.stack-keys b{font-family:var(--mono);font-weight:500;color:var(--ink)}
+
+/* signal table */
+.tablewrap{overflow-x:auto;margin:1.4em 0 1.6em}
+table{border-collapse:collapse;width:100%;font-family:var(--display);font-size:14.5px;line-height:1.4}
+th{text-align:left;font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:0 12px 8px 0;border-bottom:1px solid var(--ink)}
+td{padding:10px 12px 10px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+td:first-child{font-weight:600;white-space:nowrap}
+td.w{white-space:nowrap}
+.dots{display:inline-flex;gap:4px;vertical-align:middle;margin-right:8px}
+.dots i{width:9px;height:9px;border-radius:50%;background:var(--rule);display:block}
+.dots i.on{background:var(--verified)}
+.wtxt{color:var(--muted);font-size:13px}
+
+/* gate rule */
+.rule-box{font-family:var(--mono);font-size:15px;line-height:1.7;background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--verified);border-radius:4px;padding:14px 18px;margin:1.2em 0 1.4em;overflow-x:auto}
+.rule-box .k{color:var(--verified);font-weight:500}
+
+/* pull quote */
+.pull{font-family:var(--display);font-stretch:87.5%;font-weight:600;font-size:clamp(22px,3.4vw,27px);line-height:1.3;color:var(--ink);margin:1.8em 0;padding:4px 0 4px 20px;border-left:3px solid var(--cand);text-wrap:balance}
+
+/* results list */
+.results{list-style:none;padding:0;margin:1.2em 0 1.4em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.results li{background:var(--surface);margin:0;padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.results .big{font-family:var(--display);font-stretch:87.5%;font-weight:700;font-size:28px;line-height:1.1;font-variant-numeric:tabular-nums}
+.results .what{font-family:var(--display);font-size:14px;line-height:1.4;color:var(--ink-2)}
+@media (max-width:480px){.results{grid-template-columns:1fr}}
+
+.note{font-family:var(--display);font-size:14.5px;line-height:1.55;color:var(--ink-2);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:14px 18px;margin:1.6em 0}
+sup{font-family:var(--display);font-size:.62em;line-height:0;margin-left:1px}
+sup a{text-decoration:none;font-weight:600}
+.sources{margin-top:2.4em;font-family:var(--display);font-size:14px;line-height:1.5;color:var(--ink-2)}
+.sources h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.sources ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:4px}
+footer.author{margin-top:3em;padding-top:22px;border-top:1px solid var(--rule);font-family:var(--display);font-size:15px;line-height:1.55;color:var(--ink-2);display:flex;flex-direction:column;gap:10px}
+footer.author .links{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
+.next{font-family:var(--display);font-size:15px;color:var(--muted);margin-top:2.2em}
+.next b{color:var(--ink)}
+@media (max-width:560px){
+  body{font-size:18px}
+  .page{padding-block:36px 56px}
+  .dek{font-size:19px}
+  article h2{font-size:24px}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+<meta name="description" content="Search engines have already crawled the visual web. I use their indexes as the first stage of a copy-detection pipeline and verify every match locally on one Mac mini. Real run: 761 candidates, 643 verified copies on 396 domains.">
+<meta name="author" content="Levent Celiksan">
+<link rel="canonical" href="https://leventceliksan.github.io/copy-detection/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="How I find edited copies of images across the web without crawling it">
+<meta property="og:description" content="Search engines have already crawled the visual web. I use their indexes as the first stage of a copy-detection pipeline and verify every match locally on one Mac mini. Real run: 761 candidates, 643 verified copies on 396 domains.">
+<meta property="og:url" content="https://leventceliksan.github.io/copy-detection/">
+<meta property="og:image" content="https://leventceliksan.github.io/copy-detection/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="article:author" content="https://www.linkedin.com/in/levent-celiksan">
+</head>
+<body>
+
+
+<div class="page">
+<header class="masthead col">
+  <div class="eyebrow">Sealify engineering · Part 1</div>
+  <h1>How I find edited copies of images across the web without crawling it</h1>
+  <p class="dek">Search engines have already crawled the visual web. Crawling it all again would duplicate that work, along with the hardware, energy and water behind it. I use their indexes as the first stage of a copy-detection pipeline and do all of the verification myself, on one Mac mini.</p>
+  <div class="byline"><span><strong>Levent Celiksan</strong>, founder of Sealify</span><span>September 2026</span><span>11 min read</span></div>
+</header>
+
+<article>
+<div class="col">
+<p>If you publish photos or video, copies of your work end up on sites you have never heard of. They are rarely exact copies. They get cropped, resized, recompressed, color-graded, dropped into collages, re-titled in another language, or re-uploaded with the audio stripped out.</p>
+<p>Finding those copies is usually treated as a crawling problem. You fetch as much of the web as you can, fingerprint everything, and look your content up in that index. That is how the large systems work, and it is why they are expensive. You pay to crawl, store and re-crawl a large part of the internet before you can answer a single question.</p>
+<p>When I started building Sealify in 2023, I did not have that budget. So I asked a different question: who has already crawled the web? Google, Yandex and Bing crawl and index billions of images, and they already offer reverse image search. What they do not offer is a precise answer. Their results mix true copies with pictures that only look similar.</p>
+<p>That gap shaped the whole design. I treat public search indexes as a broad but noisy first stage, and I put my own engineering into a strict, cheap second stage that runs locally. This post explains how it works, what it found in a real test, where it falls short, and why I think not crawling is also the responsible choice.</p>
+
+<h2>The web does not need another crawler</h2>
+<p>When I designed Sealify, I asked a question engineers rarely ask: does this infrastructure need to exist at all? Not everything that is technically possible should be built.</p>
+<p>A copy-detection company that builds its own index has to crawl billions of pages, download the images and videos on them, fingerprint everything and store it. Then it has to repeat the cycle, because the web changes every minute. Google, Bing and Yandex already do all of this and keep their indexes fresh. A second index repeats their work. The same pages are fetched again, the same files are processed again, and the same data is stored again.</p>
+<p>A server is never just a line on a cloud bill. It is hardware that has to be mined, manufactured and shipped. It draws electricity every hour it runs, and data centers used about 1.5% of the world's electricity in 2024.<sup><a href="#src1">1</a></sup> The building around it needs more energy, and often fresh water, to stay cool. In the United States alone, data centers consumed about 66 billion liters of water directly in 2023.<sup><a href="#src2">2</a></sup></p>
+<p>When the hardware is retired, it joins a stream of electronic waste that carries toxic materials such as lead and mercury. The world produced 62 million tonnes of e-waste in 2022, and less than a quarter of it was documented as properly collected and recycled.<sup><a href="#src3">3</a></sup> Most of the rest is unaccounted for. Much of it is landfilled or handled by informal recyclers, where those materials can reach soil and water.</p>
+<p>In 2024, more than half of all web traffic was already automated.<sup><a href="#src4">4</a></sup> One duplicate system looks small. If every new product rebuilt its own copy of the web, the waste would compound year after year, and the world would get nothing new in return. Reusing an index that already exists is like working a mine that is already open. Digging a second one beside it needs a very good reason, and copy detection does not have one.</p>
+<p>So Sealify never crawls the web. It asks the indexes that already exist, downloads only the few hundred thumbnails that matter for one query, and spends its own compute on the one job nobody else does for it: deciding which of those candidates is really a copy. I have not measured the savings in kilowatt-hours, and I will not invent a number. The principle holds either way. <b>The cheapest and cleanest computation is the one you never run.</b></p>
+
+<h2>Retrieve with someone else's index, verify with your own</h2>
+<p>I use the retrieve-then-verify pattern that is common in search systems. The difference is that I do not own the retrieval index. In copy detection, candidate generation is the expensive half, because it needs an index of the web. Verification is cheap by comparison. It compares one query against a few hundred candidates, and a single machine can do that in minutes.</p>
+<p>So the work splits like this:</p>
+<ul>
+  <li><b>Breadth</b> comes from search engines that already index the web.</li>
+  <li><b>Precision</b> comes from a local verifier that I control, tune and measure.</li>
+  <li><b>Cost</b> stays close to a handful of API calls per scan plus local compute.</li>
+</ul>
+</div>
+
+<figure class="wide">
+  <div class="figlabel">Figure 1 · The pipeline</div>
+  <div class="pipe">
+    <div class="stage in"><span class="tag">Input</span><h4>Query</h4><p>One image, or about 10 frames picked from a video.</p></div>
+    <div class="stage borrow"><span class="tag">Borrowed index</span><h4>Fan-out search</h4><p>Google Lens, Google Reverse Image, Yandex and Bing, queried in parallel through SerpApi.</p></div>
+    <div class="stage borrow"><span class="tag">Unverified</span><h4>Candidate pool</h4><p>Deduplicated URLs with downloaded thumbnails.</p><span class="count">761 in the example run</span></div>
+    <div class="stage own"><span class="tag">Local</span><h4>Verifier</h4><p>Weighted scene score plus an ArcFace face gate.</p></div>
+    <div class="stage own"><span class="tag">Verified</span><h4>Evidence</h4><p>URL, domain, thumbnail and both scores for every match.</p><span class="count">643 in the example run</span></div>
+  </div>
+  <figcaption><b>Amber stages depend on search engines. Teal stages run on my own hardware.</b> Nothing counts as a match until the local verifier accepts it.</figcaption>
+</figure>
+
+<div class="col">
+<h2>Stage one: ask several engines at once</h2>
+<p>For each query image, the scanner asks several engines in parallel: Google Lens (exact and visual matches), Google's classic reverse image search, Yandex and Bing. I reach them through SerpApi, which returns each engine's results as structured JSON. The scanner handles provider rate limits and failed requests without aborting the scan.</p>
+<p>Asking several engines buys coverage. Each engine indexes a different slice of the web and ranks results in its own way. In the test run described below, Google Lens and Yandex together returned verified copies on 396 domains. Only 8 of those domains appeared in both. Either engine on its own would have missed roughly half of the copies.</p>
+<p>Every candidate is deduplicated, its thumbnail is downloaded, and it joins a pool for verification. At this point nothing is a match yet.</p>
+
+<h2>Stage two: decide locally what is really a copy</h2>
+<p>A search engine answers the question <em class="term">what looks like this?</em> Copy detection has to answer <em class="term">is this the same picture?</em> Most false positives live in the gap between those two questions: another photo of the same actor, another poster from the same film, an image with a similar mood.</p>
+<p>My verifier scores every candidate twice, once on the scene and once on the face.</p>
+
+<h3>Scene score</h3>
+<p>Several visual signals are combined into one weighted score. The dots show each signal's relative weight.</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Signal</th><th>What it compares</th><th>Weight</th></tr></thead>
+  <tbody>
+    <tr><td>Color distribution (HSV)</td><td>Hue, saturation and brightness across the image</td><td class="w"><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="wtxt">Large</span></td></tr>
+    <tr><td>Dominant palette</td><td>The main colors and their proportions</td><td class="w"><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="wtxt">Large</span></td></tr>
+    <tr><td>Background</td><td>The area around the subject</td><td class="w"><span class="dots"><i class="on"></i><i class="on"></i><i></i></span><span class="wtxt">Medium</span></td></tr>
+    <tr><td>Light temperature</td><td>Warm or cool cast of the lighting</td><td class="w"><span class="dots"><i class="on"></i><i></i><i></i></span><span class="wtxt">Small</span></td></tr>
+    <tr><td>RGB histogram</td><td>Raw channel distribution</td><td class="w"><span class="dots"><i class="on"></i><i></i><i></i></span><span class="wtxt">Small</span></td></tr>
+    <tr><td>Perceptual hash</td><td>Coarse structure (pHash), which breaks under crops</td><td class="w"><span class="dots"><i class="on"></i><i></i><i></i></span><span class="wtxt">Small</span></td></tr>
+    <tr><td>Deep embedding</td><td>Semantic content (EfficientNet-B7)</td><td class="w"><span class="dots"><i class="on"></i><i></i><i></i></span><span class="wtxt">Small</span></td></tr>
+  </tbody>
+</table>
+</div>
+<p>The weighting surprised me. I expected the deep-learning embedding to do most of the work, and in practice it carries very little weight. A semantic embedding is built to say that two images show the same kind of thing. For copy detection that is the wrong property, because two different photos of the same person on the same red carpet look almost identical to it.</p>
+<p>Color distribution, palette and background behave better. They survive resizing, recompression and moderate crops, and they separate different shots of the same subject. Normalizing brightness before scoring makes them tolerant of filters and exposure changes as well.</p>
+
+<h3>Face gate</h3>
+<p>When the query contains a face, a candidate must also pass an identity check using InsightFace with ArcFace embeddings. The acceptance rule is simple:</p>
+<div class="rule-box"><span class="k">accept</span> if scene_score ≥ 0.65 <span class="k">and</span> face_score ≥ 0.45</div>
+<p>The face gate removes the most common remaining error, a picture with the right colors and layout but a different person in it.</p>
+
+<h3>Calibrated, with no new training</h3>
+<p>I did not train a new model. On test cases I had checked by hand, the first version of the verifier made the right accept-or-reject decision about 60% of the time. Most of the improvement came from calibration: choosing which signals to use, tuning their weights, and setting the two thresholds. After calibration it made the right decision about 97% of the time.</p>
+<p>That figure is accuracy on a test set. The precision figure later in this post is a different measure, taken from accepted matches in real scans.</p>
+</div>
+
+<div class="col">
+<h2>One real run, end to end</h2>
+<p>Here is a single scan from July 2026. The query was the Turkish theatrical poster for <em>Beetlejuice Beetlejuice</em>, released in Turkey as <em>Beterböcek Beterböcek</em>. Every candidate in this run came through the SerpApi path described above.</p>
+</div>
+
+<figure class="wide">
+  <div class="figlabel">Figure 2 · Candidates vs. verified matches, by source</div>
+  <div class="legend"><span><i class="sw c"></i>Candidates returned</span><span><i class="sw v"></i>Passed local verification</span></div>
+  <div class="bars">
+    <div class="lab">Google Lens<small>exact matches</small></div>
+    <div class="track"><div class="cand" style="width:52.56%"><div class="ver" style="width:99.75%"></div></div></div>
+    <div class="val">399 / 400</div>
+
+    <div class="lab">Yandex<small>"about this image"</small></div>
+    <div class="track"><div class="cand" style="width:42.44%"><div class="ver" style="width:66.25%"></div></div></div>
+    <div class="val">214 / 323</div>
+
+    <div class="lab">Yandex<small>similar images</small></div>
+    <div class="track"><div class="cand" style="width:4.99%"><div class="ver" style="width:78.95%"></div></div></div>
+    <div class="val">30 / 38</div>
+
+    <div class="lab">Google Reverse Image</div>
+    <div class="track"><span class="zero">no results for this query</span></div>
+    <div class="val">0 / 0</div>
+
+    <div class="lab">Bing</div>
+    <div class="track"><span class="zero">no results for this query</span></div>
+    <div class="val">0 / 0</div>
+
+    <div class="lab total"><b>All sources</b></div>
+    <div class="track total"><div class="cand" style="width:100%"><div class="ver" style="width:84.49%"></div></div></div>
+    <div class="val total"><b>643 / 761</b></div>
+  </div>
+  <figcaption>Bar lengths are drawn to one scale (761 candidates = full width). Lens exact matches were almost all real copies. Yandex was noisier but reached different sites, and the verifier removed its noise.</figcaption>
+</figure>
+
+<div class="col">
+<ul>
+  <li>The engines returned <span class="num">761</span> candidates. The verifier accepted <span class="num">643</span> of them, spread over <span class="num">396</span> domains.</li>
+  <li>Google Lens exact matches were nearly all genuine (<span class="num">399</span> of <span class="num">400</span>). Yandex results were noisier, and <span class="num">244</span> of <span class="num">361</span> passed.</li>
+  <li>The accepted matches had a median scene score of <span class="num">0.96</span> and a median face score of <span class="num">0.70</span>.</li>
+</ul>
+<p>The query carried Turkish title text. The accepted matches included the English-language poster with a different title block, tight crops with no text at all, merchandise listings, and a YouTube thumbnail in which the poster fills only the middle third of a three-poster collage. That thumbnail scored <span class="num">0.66</span> on the scene and <span class="num">0.84</span> on the face. The scene score alone was borderline, and the face gate confirmed it. With the scene threshold at 0.70, this copy would have been lost.</p>
+</div>
+
+<figure class="wide">
+  <div class="figlabel">Figure 3 · Where the verified copies were found (396 domains)</div>
+  <div class="stack" role="img" aria-label="209 domains found only by Google Lens, 8 by both engines, 179 only by Yandex">
+    <div class="s-lens" style="width:52.78%">209</div>
+    <div class="s-both" style="width:2.02%" title="8 domains found by both"></div>
+    <div class="s-yan" style="width:45.20%">179</div>
+  </div>
+  <div class="stack-keys"><span><b>209</b> Google Lens only</span><span><b>8</b> both engines</span><span><b>179</b> Yandex only</span></div>
+  <figcaption>The two engines barely overlap. A scanner that used only one of them would have reported about half of these sites.</figcaption>
+</figure>
+
+<div class="col">
+<p>Candidate generation took about 2 minutes. Verifying all 761 candidates took about 15 minutes. This was a large scan; the median across my test runs is 2.5 minutes. The split matters for scaling. The part I do not own is fast, and the slow part is local compute, which is cheap to add.</p>
+</div>
+
+<figure class="wide">
+  <div class="figlabel">Figure 4 · Time spent in each stage (same run)</div>
+  <div class="stack" role="img" aria-label="Search took about 2 minutes, local verification about 15 minutes">
+    <div class="s-search" style="width:11.24%">2 min</div>
+    <div class="s-verify" style="width:88.76%">15 min</div>
+  </div>
+  <div class="stack-keys"><span><b>~2 min</b> search engines (borrowed)</span><span><b>~15 min</b> verification (local)</span></div>
+</figure>
+
+<div class="col">
+<p class="pull">The expensive half of copy detection is knowing which pairs of images to compare. The web's largest indexes already answer that.</p>
+
+<h2>Video uses the same pipeline</h2>
+<p>A video becomes a set of frames, and each frame becomes a query image. The hard part is choosing the frames. Intros, credits and logos appear in many unrelated videos, and blank or blurry frames match nothing useful. The frame selector:</p>
+<ul>
+  <li>skips the first and last 10% of the video, where intros, outros and logos usually sit;</li>
+  <li>drops frames that are nearly one flat color, and frames that are too blurry (low Laplacian variance);</li>
+  <li>prefers frames with a visible face, because the face gate makes those matches reliable;</li>
+  <li>searches about 10 frames, 5 at a time.</li>
+</ul>
+<p>Because matching works on frames, a copy with the audio removed or replaced is still found. In one video test, the system found more than <span class="num">1,050</span> verified matches on over <span class="num">80</span> domains.</p>
+<p>The same engine also runs in the other direction. Before Sealify registers a new video, it checks whether that video is already online. Audio fingerprinting runs first, a Shazam-style recognizer and then AcoustID, because it is cheap and decisive when the soundtrack is intact. Frame search runs when it is not. If the video is already online, the registration is rejected.</p>
+
+<h2>Running it all on one machine</h2>
+<p>The whole platform runs on a single Mac mini with an M2 Pro chip, exposed to the internet through Cloudflare Tunnel. Its fixed cost is about <span class="num">$300</span> a year. Two design choices make that work:</p>
+<ul>
+  <li><b>An admission-control queue.</b> A scan starts only when there is a free slot and enough memory and CPU headroom. Today that means 10 concurrent slots inside a 12 GB memory budget. Extra jobs wait their turn instead of taking the machine down.</li>
+  <li><b>Parallel verifier workers.</b> Five matcher processes run side by side. Each one claims its own port with a file lock, so a crashed worker restarts without disturbing the others. The models run on the Apple Silicon GPU.</li>
+</ul>
+<p>Because the search stage runs on someone else's infrastructure, growth needs more verification compute. It never needs a crawler.</p>
+
+<h2>Results across testing</h2>
+<ul class="results">
+  <li><span class="big">3,000+</span><span class="what">test runs</span></li>
+  <li><span class="big">200,000+</span><span class="what">candidate images scanned</span></li>
+  <li><span class="big">10,000+</span><span class="what">verified matches on 5,000+ domains</span></li>
+  <li><span class="big">~98%</span><span class="what">precision in manual review of the results</span></li>
+</ul>
+<p>The median scan took 2.5 minutes from upload to results. In manual review, about 2% of accepted matches turned out to be false positives.</p>
+
+<h2>Where it falls short</h2>
+<ul>
+  <li><b>Recall is capped by the engines.</b> If no engine returns a copy as a candidate, the verifier never sees it. Private groups, pages behind a login, and content the engines have not indexed are invisible.</li>
+  <li><b>Indexes lag.</b> A fresh upload may not show up in search results right away. Sealify covers this with a second layer: monitors that check chosen Instagram, TikTok and YouTube accounts every 15 minutes, and a scraper that watches known piracy sites. The index gives breadth and the monitors give freshness.</li>
+  <li><b>It depends on third parties.</b> Engines change their results, prices and terms. Using several engines and keeping the verifier independent of the source limits the damage. It does not remove the risk.</li>
+  <li><b>Measurement is incomplete.</b> Precision comes from manual review, and recall has not been measured systematically yet. The next step is a seeded benchmark: publish controlled copies of test images (cropped, color-graded, mirrored, re-titled, re-encoded) at known URLs, then measure how many the system finds and how quickly.</li>
+</ul>
+
+<h2>What I actually built</h2>
+<p>I did not invent a new model. Every component here is known: reverse image search, perceptual hashing, color histograms, ArcFace, EfficientNet. What I built is the arrangement. Treat the web's largest indexes as a noisy first stage, verify strictly on your own hardware, and a problem that seems to need a crawler fits on a Mac mini. Nothing gets crawled twice.</p>
+<p>Sealify started as a way to defend creative work against piracy, and that is still its purpose. Behind every photo, video and design is someone's time, skill and effort. If technology makes that work easy to take, it should also make it easy to defend. Generative AI raises the stakes. People will soon need to know not only where their work was copied, but whether an image of them was altered or faked, and I expect the need for this kind of protection to grow.</p>
+<p>Two ideas sit under the whole project: respect for the people who create the work, and respect for the resources computing consumes. Good engineering spends those resources only where it creates something new.</p>
+<p>That is the kind of engineering I enjoy most. I look for infrastructure that already exists, built for some other purpose, and design the piece that makes it fit a new problem.</p>
+
+<div class="note"><b>Patent Pending.</b> The system described here is covered by a US provisional patent application on content tracking and protection (63/923,341), filed in November 2025.</div>
+
+<p class="next"><b>Next in this series:</b> anchoring content fingerprints on Bitcoin, so every registration can be verified on a public block explorer with no fee for the user.</p>
+
+<section class="sources" aria-label="Sources">
+  <h3>Sources</h3>
+  <ol>
+    <li id="src1">International Energy Agency, <a href="https://www.iea.org/reports/energy-and-ai/executive-summary">Energy and AI</a> (2025), executive summary.</li>
+    <li id="src2">Lawrence Berkeley National Laboratory, <a href="https://eta-publications.lbl.gov/sites/default/files/2024-12/lbnl-2024-united-states-data-center-energy-usage-report_1.pdf">2024 United States Data Center Energy Usage Report</a>.</li>
+    <li id="src3">ITU and UNITAR, <a href="https://ewastemonitor.info/the-global-e-waste-monitor-2024/">The Global E-waste Monitor 2024</a>.</li>
+    <li id="src4">Imperva (Thales), <a href="https://www.imperva.com/resources/resource-library/reports/2025-bad-bot-report/">2025 Bad Bot Report</a>.</li>
+  </ol>
+</section>
+
+<footer class="author">
+  <div><b>Levent Celiksan</b> is a senior AI and software engineer with 19+ years in backend systems. He built and launched Sealify, a content-protection platform, in June 2026. He is the inventor on six US provisional patent applications in content protection, deepfake detection and multimedia matching, and was invited to IPHatch North America 2026.</div>
+  <div class="links"><a href="https://sealify.io">sealify.io</a><a href="https://linkedin.com/in/levent-celiksan">linkedin.com/in/levent-celiksan</a><a href="https://github.com/LeventCeliksan">github.com/LeventCeliksan</a></div>
+</footer>
+</div>
+</article>
+</div>
+
+</body>
+</html>
