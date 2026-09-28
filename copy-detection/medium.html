@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>How I find edited copies of images across the web without crawling it</title>
-<meta name="robots" content="noindex"><link rel="canonical" href="https://leventceliksan.github.io/copy-detection/"></head><body><article>
+</head><body><article>
 <h1>How I find edited copies of images across the web without crawling it</h1><p><em>Search engines have already crawled the visual web. Crawling it all again would duplicate that work, along with the hardware, energy and water behind it. I use their indexes as the first stage of a copy-detection pipeline and do all of the verification myself, on one Mac mini.</em></p>
 <p><em>Originally published at <a href="https://leventceliksan.github.io/copy-detection/">leventceliksan.github.io/copy-detection</a>.</em></p>
 <p>If you publish photos or video, copies of your work end up on sites you have never heard of. They are rarely exact copies. They get cropped, resized, recompressed, color-graded, dropped into collages, re-titled in another language, or re-uploaded with the audio stripped out.</p>
@@ -21,7 +21,7 @@
 <li><strong>Precision</strong> comes from a local verifier that I control, tune and measure.</li>
 <li><strong>Cost</strong> stays close to a handful of API calls per scan plus local compute.</li>
 </ul>
-<figure><img src="https://leventceliksan.github.io/copy-detection/img/fig1-pipeline.png" alt="Figure 1 · The pipeline. Amber stages depend on search engines; teal stages run locally. Nothing counts as a match until the local verifier accepts it."><figcaption>Figure 1 · The pipeline. Amber stages depend on search engines; teal stages run locally. Nothing counts as a match until the local verifier accepts it.</figcaption></figure>
+<p><img src="https://leventceliksan.github.io/copy-detection/img/fig1-pipeline.png" alt="Figure 1 · The pipeline. Amber stages depend on search engines; teal stages run locally. Nothing counts as a match until the local verifier accepts it." width="1888"></p><p><em>Figure 1 · The pipeline. Amber stages depend on search engines; teal stages run locally. Nothing counts as a match until the local verifier accepts it.</em></p>
 <h2>Stage one: ask several engines at once</h2>
 <p>For each query image, the scanner asks several engines in parallel: Google Lens (exact and visual matches), Google&#x27;s classic reverse image search, Yandex and Bing. I reach them through a third-party search API that returns each engine&#x27;s results as structured JSON, with automatic failover between providers.</p>
 <p>Asking several engines buys coverage. Each engine indexes a different slice of the web and ranks results in its own way. In the test run described below, Google Lens and Yandex together returned verified copies on 396 domains. Only 8 of those domains appeared in both. Either engine on its own would have missed roughly half of the copies.</p>
@@ -31,7 +31,7 @@
 <p>My verifier scores every candidate twice, once on the scene and once on the face.</p>
 <h3>Scene score</h3>
 <p>Several visual signals are combined into one weighted score. The dots show each signal&#x27;s relative weight.</p>
-<figure><img src="https://leventceliksan.github.io/copy-detection/img/table-signals.png" alt="Scene-score signals and their relative weights."><figcaption>Scene-score signals and their relative weights.</figcaption></figure>
+<p><img src="https://leventceliksan.github.io/copy-detection/img/table-signals.png" alt="Scene-score signals and their relative weights." width="1888"></p><p><em>Scene-score signals and their relative weights.</em></p>
 <p>The weighting surprised me. I expected the deep-learning embedding to do most of the work, and in practice it carries very little weight. A semantic embedding is built to say that two images show the same kind of thing. For copy detection that is the wrong property, because two different photos of the same person on the same red carpet look almost identical to it.</p>
 <p>Color distribution, palette and background behave better. They survive resizing, recompression and moderate crops, and they separate different shots of the same subject. Normalizing brightness before scoring makes them tolerant of filters and exposure changes as well.</p>
 <h3>Face gate</h3>
@@ -43,16 +43,16 @@
 <p>That figure is accuracy on a test set. The precision figure later in this post is a different measure, taken from accepted matches in real scans.</p>
 <h2>One real run, end to end</h2>
 <p>Here is a single scan from July 2026. The query was the Turkish theatrical poster for <em>Beetlejuice Beetlejuice</em>, released in Turkey as <em>Beterböcek Beterböcek</em>. Every candidate in this run came through the API path described above.</p>
-<figure><img src="https://leventceliksan.github.io/copy-detection/img/fig2-candidates.png" alt="Figure 2 · Candidates vs. verified matches, by source (one scale: 761 candidates = full width)."><figcaption>Figure 2 · Candidates vs. verified matches, by source (one scale: 761 candidates = full width).</figcaption></figure>
+<p><img src="https://leventceliksan.github.io/copy-detection/img/fig2-candidates.png" alt="Figure 2 · Candidates vs. verified matches, by source (one scale: 761 candidates = full width)." width="1888"></p><p><em>Figure 2 · Candidates vs. verified matches, by source (one scale: 761 candidates = full width).</em></p>
 <ul>
 <li>The engines returned 761 candidates. The verifier accepted 643 of them, spread over 396 domains.</li>
 <li>Google Lens exact matches were nearly all genuine (399 of 400). Yandex results were noisier, and 244 of 361 passed.</li>
 <li>The accepted matches had a median scene score of 0.96 and a median face score of 0.70.</li>
 </ul>
 <p>The query carried Turkish title text. The accepted matches included the English-language poster with a different title block, tight crops with no text at all, merchandise listings, and a YouTube thumbnail in which the poster fills only the middle third of a three-poster collage. That thumbnail scored 0.66 on the scene and 0.84 on the face. The scene score alone was borderline, and the face gate confirmed it. With the scene threshold at 0.70, this copy would have been lost.</p>
-<figure><img src="https://leventceliksan.github.io/copy-detection/img/fig3-overlap.png" alt="Figure 3 · Where the verified copies were found (396 domains). The two engines barely overlap."><figcaption>Figure 3 · Where the verified copies were found (396 domains). The two engines barely overlap.</figcaption></figure>
+<p><img src="https://leventceliksan.github.io/copy-detection/img/fig3-overlap.png" alt="Figure 3 · Where the verified copies were found (396 domains). The two engines barely overlap." width="1888"></p><p><em>Figure 3 · Where the verified copies were found (396 domains). The two engines barely overlap.</em></p>
 <p>Candidate generation took about 2 minutes. Verifying all 761 candidates took about 15 minutes. This was a large scan; the median across my test runs is 2.5 minutes. The split matters for scaling. The part I do not own is fast, and the slow part is local compute, which is cheap to add.</p>
-<figure><img src="https://leventceliksan.github.io/copy-detection/img/fig4-timing.png" alt="Figure 4 · Time spent in each stage (same run): ~2 min search, ~15 min local verification."><figcaption>Figure 4 · Time spent in each stage (same run): ~2 min search, ~15 min local verification.</figcaption></figure>
+<p><img src="https://leventceliksan.github.io/copy-detection/img/fig4-timing.png" alt="Figure 4 · Time spent in each stage (same run): ~2 min search, ~15 min local verification." width="1888"></p><p><em>Figure 4 · Time spent in each stage (same run): ~2 min search, ~15 min local verification.</em></p>
 <blockquote>The expensive half of copy detection is knowing which pairs of images to compare. The web&#x27;s largest indexes already answer that.</blockquote>
 <h2>Video uses the same pipeline</h2>
 <p>A video becomes a set of frames, and each frame becomes a query image. The hard part is choosing the frames. Intros, credits and logos appear in many unrelated videos, and blank or blurry frames match nothing useful. The frame selector:</p>
