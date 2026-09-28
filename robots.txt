@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /copy-detection/medium.html
+Sitemap: https://leventceliksan.github.io/sitemap.xml
