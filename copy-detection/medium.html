@@ -1,0 +1,103 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>How I find edited copies of images across the web without crawling it</title>
+<meta name="robots" content="noindex"><link rel="canonical" href="https://leventceliksan.github.io/copy-detection/"></head><body><article>
+<h1>How I find edited copies of images across the web without crawling it</h1><p><em>Search engines have already crawled the visual web. Crawling it all again would duplicate that work, along with the hardware, energy and water behind it. I use their indexes as the first stage of a copy-detection pipeline and do all of the verification myself, on one Mac mini.</em></p>
+<p><em>Originally published at <a href="https://leventceliksan.github.io/copy-detection/">leventceliksan.github.io/copy-detection</a>.</em></p>
+<p>If you publish photos or video, copies of your work end up on sites you have never heard of. They are rarely exact copies. They get cropped, resized, recompressed, color-graded, dropped into collages, re-titled in another language, or re-uploaded with the audio stripped out.</p>
+<p>Finding those copies is usually treated as a crawling problem. You fetch as much of the web as you can, fingerprint everything, and look your content up in that index. That is how the large systems work, and it is why they are expensive. You pay to crawl, store and re-crawl a large part of the internet before you can answer a single question.</p>
+<p>When I started building Sealify in 2023, I asked a different question: who has already crawled the web? Google, Yandex and Bing crawl and index billions of images, and they already offer reverse image search. What they do not offer is a precise answer. Their results mix true copies with pictures that only look similar.</p>
+<p>That gap shaped the whole design. I treat public search indexes as a broad but noisy first stage, and I put my own engineering into a strict, cheap second stage that runs locally. This post explains how it works, what it found in a real test, where it falls short, and why I think not crawling is also the responsible choice.</p>
+<h2>The web does not need another crawler</h2>
+<p>When I designed Sealify, I asked a question engineers rarely ask: does this infrastructure need to exist at all? Not everything that is technically possible should be built.</p>
+<p>A copy-detection company that builds its own index has to crawl billions of pages, download the images and videos on them, fingerprint everything and store it. Then it has to repeat the cycle, because the web changes every minute. Google, Bing and Yandex already do all of this and keep their indexes fresh. A second index repeats their work. The same pages are fetched again, the same files are processed again, and the same data is stored again.</p>
+<p>A server is never just a line on a cloud bill. It is hardware that has to be mined, manufactured and shipped. It draws electricity every hour it runs, and data centers used about 1.5% of the world&#x27;s electricity in 2024.<sup><a href="#src1">1</a></sup> The building around it needs more energy, and often fresh water, to stay cool. In the United States alone, data centers consumed about 66 billion liters of water directly in 2023.<sup><a href="#src2">2</a></sup></p>
+<p>When the hardware is retired, it joins a stream of electronic waste that carries toxic materials such as lead and mercury. The world produced 62 million tonnes of e-waste in 2022, and less than a quarter of it was documented as properly collected and recycled.<sup><a href="#src3">3</a></sup> Most of the rest is unaccounted for. Much of it is landfilled or handled by informal recyclers, where those materials can reach soil and water.</p>
+<p>In 2024, more than half of all web traffic was already automated.<sup><a href="#src4">4</a></sup> One duplicate system looks small. If every new product rebuilt its own copy of the web, the waste would compound year after year, and the world would get nothing new in return. Reusing an index that already exists is like working a mine that is already open. Digging a second one beside it needs a very good reason, and copy detection does not have one.</p>
+<p>So Sealify never crawls the web. It asks the indexes that already exist, downloads only the few hundred thumbnails that matter for one query, and spends its own compute on the one job nobody else does for it: deciding which of those candidates is really a copy. I have not measured the savings in kilowatt-hours, and I will not invent a number. The principle holds either way. <strong>The cheapest and cleanest computation is the one you never run.</strong></p>
+<h2>Retrieve with someone else&#x27;s index, verify with your own</h2>
+<p>I use the retrieve-then-verify pattern that is common in search systems. The difference is that I do not own the retrieval index. In copy detection, candidate generation is the expensive half, because it needs an index of the web. Verification is cheap by comparison. It compares one query against a few hundred candidates, and a single machine can do that in minutes.</p>
+<p>So the work splits like this:</p>
+<ul>
+<li><strong>Breadth</strong> comes from search engines that already index the web.</li>
+<li><strong>Precision</strong> comes from a local verifier that I control, tune and measure.</li>
+<li><strong>Cost</strong> stays close to a handful of API calls per scan plus local compute.</li>
+</ul>
+<figure><img src="https://leventceliksan.github.io/copy-detection/img/fig1-pipeline.png" alt="Figure 1 · The pipeline. Amber stages depend on search engines; teal stages run locally. Nothing counts as a match until the local verifier accepts it."><figcaption>Figure 1 · The pipeline. Amber stages depend on search engines; teal stages run locally. Nothing counts as a match until the local verifier accepts it.</figcaption></figure>
+<h2>Stage one: ask several engines at once</h2>
+<p>For each query image, the scanner asks several engines in parallel: Google Lens (exact and visual matches), Google&#x27;s classic reverse image search, Yandex and Bing. I reach them through a third-party search API that returns each engine&#x27;s results as structured JSON, with automatic failover between providers.</p>
+<p>Asking several engines buys coverage. Each engine indexes a different slice of the web and ranks results in its own way. In the test run described below, Google Lens and Yandex together returned verified copies on 396 domains. Only 8 of those domains appeared in both. Either engine on its own would have missed roughly half of the copies.</p>
+<p>Every candidate is deduplicated, its thumbnail is downloaded, and it joins a pool for verification. At this point nothing is a match yet.</p>
+<h2>Stage two: decide locally what is really a copy</h2>
+<p>A search engine answers the question <em>what looks like this?</em> Copy detection has to answer <em>is this the same picture?</em> Most false positives live in the gap between those two questions: another photo of the same actor, another poster from the same film, an image with a similar mood.</p>
+<p>My verifier scores every candidate twice, once on the scene and once on the face.</p>
+<h3>Scene score</h3>
+<p>Several visual signals are combined into one weighted score. The dots show each signal&#x27;s relative weight.</p>
+<figure><img src="https://leventceliksan.github.io/copy-detection/img/table-signals.png" alt="Scene-score signals and their relative weights."><figcaption>Scene-score signals and their relative weights.</figcaption></figure>
+<p>The weighting surprised me. I expected the deep-learning embedding to do most of the work, and in practice it carries very little weight. A semantic embedding is built to say that two images show the same kind of thing. For copy detection that is the wrong property, because two different photos of the same person on the same red carpet look almost identical to it.</p>
+<p>Color distribution, palette and background behave better. They survive resizing, recompression and moderate crops, and they separate different shots of the same subject. Normalizing brightness before scoring makes them tolerant of filters and exposure changes as well.</p>
+<h3>Face gate</h3>
+<p>When the query contains a face, a candidate must also pass an identity check using InsightFace with ArcFace embeddings. The acceptance rule is simple:</p>
+<pre><code>accept if scene_score ≥ 0.65 and face_score ≥ 0.45</code></pre>
+<p>The face gate removes the most common remaining error, a picture with the right colors and layout but a different person in it.</p>
+<h3>Calibrated, with no new training</h3>
+<p>I did not need to train a new model. On test cases I had checked by hand, the first version of the verifier made the right accept-or-reject decision about 60% of the time. Most of the improvement came from calibration: choosing which signals to use, tuning their weights, and setting the two thresholds. After calibration it made the right decision about 97% of the time.</p>
+<p>That figure is accuracy on a test set. The precision figure later in this post is a different measure, taken from accepted matches in real scans.</p>
+<h2>One real run, end to end</h2>
+<p>Here is a single scan from July 2026. The query was the Turkish theatrical poster for <em>Beetlejuice Beetlejuice</em>, released in Turkey as <em>Beterböcek Beterböcek</em>. Every candidate in this run came through the API path described above.</p>
+<figure><img src="https://leventceliksan.github.io/copy-detection/img/fig2-candidates.png" alt="Figure 2 · Candidates vs. verified matches, by source (one scale: 761 candidates = full width)."><figcaption>Figure 2 · Candidates vs. verified matches, by source (one scale: 761 candidates = full width).</figcaption></figure>
+<ul>
+<li>The engines returned 761 candidates. The verifier accepted 643 of them, spread over 396 domains.</li>
+<li>Google Lens exact matches were nearly all genuine (399 of 400). Yandex results were noisier, and 244 of 361 passed.</li>
+<li>The accepted matches had a median scene score of 0.96 and a median face score of 0.70.</li>
+</ul>
+<p>The query carried Turkish title text. The accepted matches included the English-language poster with a different title block, tight crops with no text at all, merchandise listings, and a YouTube thumbnail in which the poster fills only the middle third of a three-poster collage. That thumbnail scored 0.66 on the scene and 0.84 on the face. The scene score alone was borderline, and the face gate confirmed it. With the scene threshold at 0.70, this copy would have been lost.</p>
+<figure><img src="https://leventceliksan.github.io/copy-detection/img/fig3-overlap.png" alt="Figure 3 · Where the verified copies were found (396 domains). The two engines barely overlap."><figcaption>Figure 3 · Where the verified copies were found (396 domains). The two engines barely overlap.</figcaption></figure>
+<p>Candidate generation took about 2 minutes. Verifying all 761 candidates took about 15 minutes. This was a large scan; the median across my test runs is 2.5 minutes. The split matters for scaling. The part I do not own is fast, and the slow part is local compute, which is cheap to add.</p>
+<figure><img src="https://leventceliksan.github.io/copy-detection/img/fig4-timing.png" alt="Figure 4 · Time spent in each stage (same run): ~2 min search, ~15 min local verification."><figcaption>Figure 4 · Time spent in each stage (same run): ~2 min search, ~15 min local verification.</figcaption></figure>
+<blockquote>The expensive half of copy detection is knowing which pairs of images to compare. The web&#x27;s largest indexes already answer that.</blockquote>
+<h2>Video uses the same pipeline</h2>
+<p>A video becomes a set of frames, and each frame becomes a query image. The hard part is choosing the frames. Intros, credits and logos appear in many unrelated videos, and blank or blurry frames match nothing useful. The frame selector:</p>
+<ul>
+<li>skips the first and last 10% of the video, where intros, outros and logos usually sit;</li>
+<li>drops frames that are nearly one flat color, and frames that are too blurry (low Laplacian variance);</li>
+<li>prefers frames with a visible face, because the face gate makes those matches reliable;</li>
+<li>searches about 10 frames, 5 at a time.</li>
+</ul>
+<p>Because matching works on frames, a copy with the audio removed or replaced is still found. In one video test, the system found more than 1,050 verified matches on over 80 domains.</p>
+<p>The same engine also runs in the other direction. Before Sealify registers a new video, it checks whether that video is already online. Audio fingerprinting runs first, a Shazam-style recognizer and then AcoustID, because it is cheap and decisive when the soundtrack is intact. Frame search runs when it is not. If the video is already online, the registration is rejected.</p>
+<h2>Running it all on one machine</h2>
+<p>The whole platform runs on a single Mac mini with an M2 Pro chip, exposed to the internet through Cloudflare Tunnel. Its fixed cost is about $300 a year. Two design choices make that work:</p>
+<ul>
+<li><strong>An admission-control queue.</strong> A scan starts only when there is a free slot and enough memory and CPU headroom. Today that means 10 concurrent slots inside a 12 GB memory budget. Extra jobs wait their turn instead of taking the machine down.</li>
+<li><strong>Parallel verifier workers.</strong> Five matcher processes run side by side. Each one claims its own port with a file lock, so a crashed worker restarts without disturbing the others. The models run on the Apple Silicon GPU.</li>
+</ul>
+<p>Because the search stage runs on someone else&#x27;s infrastructure, growth needs more verification compute. It never needs a crawler.</p>
+<h2>Results across testing</h2>
+<ul>
+<li><strong>3,000+</strong> test runs</li>
+<li><strong>200,000+</strong> candidate images scanned</li>
+<li><strong>10,000+</strong> verified matches on 5,000+ domains</li>
+<li><strong>~98%</strong> precision in manual review of the results</li>
+</ul>
+<p>The median scan took 2.5 minutes from upload to results. In manual review, about 2% of accepted matches turned out to be false positives.</p>
+<h2>Where it falls short</h2>
+<ul>
+<li><strong>Recall is capped by the engines.</strong> If no engine returns a copy as a candidate, the verifier never sees it. Private groups, pages behind a login, and content the engines have not indexed are invisible.</li>
+<li><strong>Indexes lag.</strong> A fresh upload may not show up in search results right away. Sealify covers this with a second layer: monitors that check chosen Instagram, TikTok and YouTube accounts every 15 minutes, and a monitor that watches known piracy sites. The index gives breadth and the monitors give freshness.</li>
+<li><strong>It depends on third parties.</strong> Engines change their results, prices and terms. Using several engines and keeping the verifier independent of the source limits the damage. It does not remove the risk.</li>
+<li><strong>Recall still needs a formal benchmark.</strong> Precision comes from manual review, and recall has not been measured systematically yet. The next step is a seeded benchmark: publish controlled copies of test images (cropped, color-graded, mirrored, re-titled, re-encoded) at known URLs, then measure how many the system finds and how quickly.</li>
+</ul>
+<h2>What I actually built</h2>
+<p>I did not need a new model. Every component here is known: reverse image search, perceptual hashing, color histograms, ArcFace, EfficientNet. What I built is the arrangement. Treat the web&#x27;s largest indexes as a noisy first stage, verify strictly on your own hardware, and a problem that seems to need a crawler fits on a Mac mini. Nothing gets crawled twice.</p>
+<p>Sealify started as a way to defend creative work against piracy, and that is still its purpose. Behind every photo, video and design is someone&#x27;s time, skill and effort. If technology makes that work easy to take, it should also make it easy to defend. Generative AI raises the stakes. People will soon need to know not only where their work was copied, but whether an image of them was altered or faked, and I expect the need for this kind of protection to grow.</p>
+<p>Two ideas sit under the whole project: respect for the people who create the work, and respect for the resources computing consumes. Good engineering spends those resources only where it creates something new.</p>
+<p>That is the kind of engineering I enjoy most. I look for infrastructure that already exists, built for some other purpose, and design the piece that makes it fit a new problem.</p>
+<p><strong>Patent Pending.</strong> The system described here is covered by a US provisional patent application on content tracking and protection (63/923,341), filed in November 2025.</p>
+<p><em><strong>Next in this series:</strong> anchoring content fingerprints on Bitcoin, so every registration can be verified on a public block explorer with no fee for the user.</em></p>
+<h3>Sources</h3>
+<li>International Energy Agency, <a href="https://www.iea.org/reports/energy-and-ai/executive-summary">Energy and AI</a> (2025), executive summary.</li>
+<li>Lawrence Berkeley National Laboratory, <a href="https://eta-publications.lbl.gov/sites/default/files/2024-12/lbnl-2024-united-states-data-center-energy-usage-report_1.pdf">2024 United States Data Center Energy Usage Report</a>.</li>
+<li>ITU and UNITAR, <a href="https://ewastemonitor.info/the-global-e-waste-monitor-2024/">The Global E-waste Monitor 2024</a>.</li>
+<li>Imperva (Thales), <a href="https://www.imperva.com/resources/resource-library/reports/2025-bad-bot-report/">2025 Bad Bot Report</a>.</li>
+<p><strong>Levent Celiksan</strong> is a senior AI and software engineer with 19+ years in backend systems. He designed and wrote the Sealify platform himself and launched it in June 2026. He is the inventor on six US provisional patent applications in content protection, deepfake detection and multimedia matching, and was invited to participate in IPHatch North America 2026.</p>
+<p><a href="https://sealify.io">sealify.io</a><a href="https://linkedin.com/in/levent-celiksan">linkedin.com/in/levent-celiksan</a><a href="https://github.com/LeventCeliksan">github.com/LeventCeliksan</a></p>
+</article></body></html>
