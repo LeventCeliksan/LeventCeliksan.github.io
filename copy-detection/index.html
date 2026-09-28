@@ -174,7 +174,6 @@ footer.author .links{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
 </head>
 <body>
 
-
 <div class="page">
 <header class="masthead col">
   <div class="eyebrow">Sealify engineering · Part 1</div>
@@ -187,7 +186,7 @@ footer.author .links{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
 <div class="col">
 <p>If you publish photos or video, copies of your work end up on sites you have never heard of. They are rarely exact copies. They get cropped, resized, recompressed, color-graded, dropped into collages, re-titled in another language, or re-uploaded with the audio stripped out.</p>
 <p>Finding those copies is usually treated as a crawling problem. You fetch as much of the web as you can, fingerprint everything, and look your content up in that index. That is how the large systems work, and it is why they are expensive. You pay to crawl, store and re-crawl a large part of the internet before you can answer a single question.</p>
-<p>When I started building Sealify in 2023, I did not have that budget. So I asked a different question: who has already crawled the web? Google, Yandex and Bing crawl and index billions of images, and they already offer reverse image search. What they do not offer is a precise answer. Their results mix true copies with pictures that only look similar.</p>
+<p>When I started building Sealify in 2023, I asked a different question: who has already crawled the web? Google, Yandex and Bing crawl and index billions of images, and they already offer reverse image search. What they do not offer is a precise answer. Their results mix true copies with pictures that only look similar.</p>
 <p>That gap shaped the whole design. I treat public search indexes as a broad but noisy first stage, and I put my own engineering into a strict, cheap second stage that runs locally. This post explains how it works, what it found in a real test, where it falls short, and why I think not crawling is also the responsible choice.</p>
 
 <h2>The web does not need another crawler</h2>
@@ -212,7 +211,7 @@ footer.author .links{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
   <div class="figlabel">Figure 1 · The pipeline</div>
   <div class="pipe">
     <div class="stage in"><span class="tag">Input</span><h4>Query</h4><p>One image, or about 10 frames picked from a video.</p></div>
-    <div class="stage borrow"><span class="tag">Borrowed index</span><h4>Fan-out search</h4><p>Google Lens, Google Reverse Image, Yandex and Bing, queried in parallel through SerpApi.</p></div>
+    <div class="stage borrow"><span class="tag">Borrowed index</span><h4>Fan-out search</h4><p>Google Lens, Google Reverse Image, Yandex and Bing, queried in parallel through a search API.</p></div>
     <div class="stage borrow"><span class="tag">Unverified</span><h4>Candidate pool</h4><p>Deduplicated URLs with downloaded thumbnails.</p><span class="count">761 in the example run</span></div>
     <div class="stage own"><span class="tag">Local</span><h4>Verifier</h4><p>Weighted scene score plus an ArcFace face gate.</p></div>
     <div class="stage own"><span class="tag">Verified</span><h4>Evidence</h4><p>URL, domain, thumbnail and both scores for every match.</p><span class="count">643 in the example run</span></div>
@@ -222,7 +221,7 @@ footer.author .links{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
 
 <div class="col">
 <h2>Stage one: ask several engines at once</h2>
-<p>For each query image, the scanner asks several engines in parallel: Google Lens (exact and visual matches), Google's classic reverse image search, Yandex and Bing. I reach them through SerpApi, which returns each engine's results as structured JSON. The scanner handles provider rate limits and failed requests without aborting the scan.</p>
+<p>For each query image, the scanner asks several engines in parallel: Google Lens (exact and visual matches), Google's classic reverse image search, Yandex and Bing. I reach them through a third-party search API that returns each engine's results as structured JSON, with automatic failover between providers.</p>
 <p>Asking several engines buys coverage. Each engine indexes a different slice of the web and ranks results in its own way. In the test run described below, Google Lens and Yandex together returned verified copies on 396 domains. Only 8 of those domains appeared in both. Either engine on its own would have missed roughly half of the copies.</p>
 <p>Every candidate is deduplicated, its thumbnail is downloaded, and it joins a pool for verification. At this point nothing is a match yet.</p>
 
@@ -255,13 +254,13 @@ footer.author .links{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
 <p>The face gate removes the most common remaining error, a picture with the right colors and layout but a different person in it.</p>
 
 <h3>Calibrated, with no new training</h3>
-<p>I did not train a new model. On test cases I had checked by hand, the first version of the verifier made the right accept-or-reject decision about 60% of the time. Most of the improvement came from calibration: choosing which signals to use, tuning their weights, and setting the two thresholds. After calibration it made the right decision about 97% of the time.</p>
+<p>I did not need to train a new model. On test cases I had checked by hand, the first version of the verifier made the right accept-or-reject decision about 60% of the time. Most of the improvement came from calibration: choosing which signals to use, tuning their weights, and setting the two thresholds. After calibration it made the right decision about 97% of the time.</p>
 <p>That figure is accuracy on a test set. The precision figure later in this post is a different measure, taken from accepted matches in real scans.</p>
 </div>
 
 <div class="col">
 <h2>One real run, end to end</h2>
-<p>Here is a single scan from July 2026. The query was the Turkish theatrical poster for <em>Beetlejuice Beetlejuice</em>, released in Turkey as <em>Beterböcek Beterböcek</em>. Every candidate in this run came through the SerpApi path described above.</p>
+<p>Here is a single scan from July 2026. The query was the Turkish theatrical poster for <em>Beetlejuice Beetlejuice</em>, released in Turkey as <em>Beterböcek Beterböcek</em>. Every candidate in this run came through the API path described above.</p>
 </div>
 
 <figure class="wide">
@@ -362,13 +361,13 @@ footer.author .links{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
 <h2>Where it falls short</h2>
 <ul>
   <li><b>Recall is capped by the engines.</b> If no engine returns a copy as a candidate, the verifier never sees it. Private groups, pages behind a login, and content the engines have not indexed are invisible.</li>
-  <li><b>Indexes lag.</b> A fresh upload may not show up in search results right away. Sealify covers this with a second layer: monitors that check chosen Instagram, TikTok and YouTube accounts every 15 minutes, and a scraper that watches known piracy sites. The index gives breadth and the monitors give freshness.</li>
+  <li><b>Indexes lag.</b> A fresh upload may not show up in search results right away. Sealify covers this with a second layer: monitors that check chosen Instagram, TikTok and YouTube accounts every 15 minutes, and a monitor that watches known piracy sites. The index gives breadth and the monitors give freshness.</li>
   <li><b>It depends on third parties.</b> Engines change their results, prices and terms. Using several engines and keeping the verifier independent of the source limits the damage. It does not remove the risk.</li>
-  <li><b>Measurement is incomplete.</b> Precision comes from manual review, and recall has not been measured systematically yet. The next step is a seeded benchmark: publish controlled copies of test images (cropped, color-graded, mirrored, re-titled, re-encoded) at known URLs, then measure how many the system finds and how quickly.</li>
+  <li><b>Recall still needs a formal benchmark.</b> Precision comes from manual review, and recall has not been measured systematically yet. The next step is a seeded benchmark: publish controlled copies of test images (cropped, color-graded, mirrored, re-titled, re-encoded) at known URLs, then measure how many the system finds and how quickly.</li>
 </ul>
 
 <h2>What I actually built</h2>
-<p>I did not invent a new model. Every component here is known: reverse image search, perceptual hashing, color histograms, ArcFace, EfficientNet. What I built is the arrangement. Treat the web's largest indexes as a noisy first stage, verify strictly on your own hardware, and a problem that seems to need a crawler fits on a Mac mini. Nothing gets crawled twice.</p>
+<p>I did not need a new model. Every component here is known: reverse image search, perceptual hashing, color histograms, ArcFace, EfficientNet. What I built is the arrangement. Treat the web's largest indexes as a noisy first stage, verify strictly on your own hardware, and a problem that seems to need a crawler fits on a Mac mini. Nothing gets crawled twice.</p>
 <p>Sealify started as a way to defend creative work against piracy, and that is still its purpose. Behind every photo, video and design is someone's time, skill and effort. If technology makes that work easy to take, it should also make it easy to defend. Generative AI raises the stakes. People will soon need to know not only where their work was copied, but whether an image of them was altered or faked, and I expect the need for this kind of protection to grow.</p>
 <p>Two ideas sit under the whole project: respect for the people who create the work, and respect for the resources computing consumes. Good engineering spends those resources only where it creates something new.</p>
 <p>That is the kind of engineering I enjoy most. I look for infrastructure that already exists, built for some other purpose, and design the piece that makes it fit a new problem.</p>
@@ -388,7 +387,7 @@ footer.author .links{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
 </section>
 
 <footer class="author">
-  <div><b>Levent Celiksan</b> is a senior AI and software engineer with 19+ years in backend systems. He built and launched Sealify, a content-protection platform, in June 2026. He is the inventor on six US provisional patent applications in content protection, deepfake detection and multimedia matching, and was invited to IPHatch North America 2026.</div>
+  <div><b>Levent Celiksan</b> is a senior AI and software engineer with 19+ years in backend systems. He designed and wrote the Sealify platform himself and launched it in June 2026. He is the inventor on six US provisional patent applications in content protection, deepfake detection and multimedia matching, and was invited to participate in IPHatch North America 2026.</div>
   <div class="links"><a href="https://sealify.io">sealify.io</a><a href="https://linkedin.com/in/levent-celiksan">linkedin.com/in/levent-celiksan</a><a href="https://github.com/LeventCeliksan">github.com/LeventCeliksan</a></div>
 </footer>
 </div>
